@@ -42,7 +42,6 @@ export default function AnalyzeClient() {
       currentState: item.currentState ?? "",
       quote: item.quote ?? "",
       quoteKorean: item.quoteKorean ?? item.quote ?? "",
-      reason: item.reason ?? "",
       person: item.person ?? "",
     }));
   });

@@ -25,7 +25,7 @@ export default function QuoteCard({
 
   const copyQuote = async () => {
     if (!quote) return;
-    const text = `[현재 상태]\n${quote.currentState}\n\n[명언 원문]\n${quote.quote} — ${quote.person}\n\n[명언 번역]\n${quote.quoteKorean}\n\n[이유]\n${quote.reason}`;
+    const text = `[현재 상태]\n${quote.currentState}\n\n[명언 원문]\n${quote.quote} — ${quote.person}\n\n[명언 번역]\n${quote.quoteKorean}`;
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
@@ -80,8 +80,6 @@ export default function QuoteCard({
               <blockquote className="mt-1 text-zinc-200">“{quote.quoteKorean}”</blockquote>
             </>
           ) : null}
-          <p className="mt-4 text-zinc-400">[이유]</p>
-          <p className="mt-1">{quote.reason}</p>
         </div>
       ) : (
         <p className="mt-4 text-sm text-zinc-400">

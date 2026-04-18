@@ -56,7 +56,6 @@ export interface QuoteResult {
   currentState: string;
   quote: string;
   quoteKorean: string;
-  reason: string;
   person: string;
 }
 
