@@ -24,5 +24,5 @@ export const DEFAULT_SETTINGS: AppContentSettings = {
   developerIntro:
     "제품/프론트엔드/백엔드를 모두 다루며, 사용자 행동 데이터와 감성적인 UX를 함께 설계하는 개발자입니다.",
   instagramId: "@your_instagram_id",
-  donationUrl: "https://www.buymeacoffee.com/",
+  donationAccount: "국민은행 123456-78-901234 (예금주: 홍길동)",
 };

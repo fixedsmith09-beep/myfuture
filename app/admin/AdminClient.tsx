@@ -22,7 +22,14 @@ export default function AdminClient() {
   const [settings, setSettings] = useState<AppContentSettings>(() => {
     if (typeof window === "undefined") return DEFAULT_SETTINGS;
     const raw = localStorage.getItem(STORAGE_KEYS.appSettings);
-    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
+    if (!raw) return DEFAULT_SETTINGS;
+    const parsed = JSON.parse(raw) as Partial<AppContentSettings> & { donationUrl?: string };
+    return {
+      ...DEFAULT_SETTINGS,
+      ...parsed,
+      donationAccount:
+        parsed.donationAccount ?? parsed.donationUrl ?? DEFAULT_SETTINGS.donationAccount,
+    };
   });
   const [reviews, setReviews] = useState<Review[]>(() => {
     if (typeof window === "undefined") return [];
@@ -232,11 +239,11 @@ export default function AdminClient() {
               />
             </label>
             <label className="grid gap-1 text-sm text-zinc-300">
-              후원 링크
+              후원 계좌
               <input
                 className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2"
-                value={settings.donationUrl}
-                onChange={(e) => setSettings((prev) => ({ ...prev, donationUrl: e.target.value }))}
+                value={settings.donationAccount}
+                onChange={(e) => setSettings((prev) => ({ ...prev, donationAccount: e.target.value }))}
               />
             </label>
             <button

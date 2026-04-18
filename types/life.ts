@@ -72,7 +72,7 @@ export interface AppContentSettings {
   makerReason: string;
   developerIntro: string;
   instagramId: string;
-  donationUrl: string;
+  donationAccount: string;
 }
 
 export interface Review {

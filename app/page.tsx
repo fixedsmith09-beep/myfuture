@@ -26,7 +26,14 @@ export default function Home() {
   const [settings, setSettings] = useState<AppContentSettings>(() => {
     if (typeof window === "undefined") return DEFAULT_SETTINGS;
     const raw = localStorage.getItem(STORAGE_KEYS.appSettings);
-    return raw ? ({ ...DEFAULT_SETTINGS, ...JSON.parse(raw) } as AppContentSettings) : DEFAULT_SETTINGS;
+    if (!raw) return DEFAULT_SETTINGS;
+    const parsed = JSON.parse(raw) as Partial<AppContentSettings> & { donationUrl?: string };
+    return {
+      ...DEFAULT_SETTINGS,
+      ...parsed,
+      donationAccount:
+        parsed.donationAccount ?? parsed.donationUrl ?? DEFAULT_SETTINGS.donationAccount,
+    } as AppContentSettings;
   });
   const isHydrated = useSyncExternalStore(
     () => () => {},
@@ -47,7 +54,17 @@ export default function Home() {
   useEffect(() => {
     const sync = () => {
       const rawSettings = localStorage.getItem(STORAGE_KEYS.appSettings);
-      setSettings(rawSettings ? { ...DEFAULT_SETTINGS, ...JSON.parse(rawSettings) } : DEFAULT_SETTINGS);
+      if (!rawSettings) {
+        setSettings(DEFAULT_SETTINGS);
+      } else {
+        const parsed = JSON.parse(rawSettings) as Partial<AppContentSettings> & { donationUrl?: string };
+        setSettings({
+          ...DEFAULT_SETTINGS,
+          ...parsed,
+          donationAccount:
+            parsed.donationAccount ?? parsed.donationUrl ?? DEFAULT_SETTINGS.donationAccount,
+        });
+      }
       const rawReviews = localStorage.getItem(STORAGE_KEYS.reviews);
       setReviews(rawReviews ? JSON.parse(rawReviews) : []);
     };
@@ -156,15 +173,14 @@ export default function Home() {
           <p className="text-sm leading-relaxed text-zinc-300 whitespace-pre-wrap">{settings.developerIntro}</p>
         </SectionCard>
 
-        <div className="flex flex-wrap gap-3">
-          <a
-            href={settings.donationUrl}
-            target="_blank"
-            rel="noreferrer"
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => navigator.clipboard.writeText(settings.donationAccount)}
             className="rounded-lg bg-amber-500 px-4 py-2.5 font-semibold text-zinc-900 transition hover:bg-amber-400"
           >
-            후원하기
-          </a>
+            후원 계좌 복사
+          </button>
+          <p className="text-sm text-zinc-300">{settings.donationAccount}</p>
           <button
             onClick={() => setShowCodeModal(true)}
             className="rounded-lg border border-zinc-600 px-4 py-2.5 font-semibold text-zinc-100 transition hover:border-zinc-400"
