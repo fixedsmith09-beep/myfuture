@@ -53,9 +53,11 @@ ADMIN_PASSWORD=your_admin_password_here
 ACCESS_CODE_SECRET=your_access_code_secret_here
 KV_REST_API_URL=your_kv_rest_api_url
 KV_REST_API_TOKEN=your_kv_rest_api_token
+REDIS_URL=redis://default:password@host:port
 ```
 
 `ACCESS_CODE_SECRET`은 유료 코드 서명/검증용 비밀값입니다.
-`KV_REST_API_URL`, `KV_REST_API_TOKEN`을 설정하면 1회용 코드 사용 로그가 Vercel 배포 환경에서도 안정적으로 유지됩니다.
+`KV_REST_API_URL`, `KV_REST_API_TOKEN`을 우선 사용하고, 값이 없으면 `REDIS_URL`로 자동 연결합니다.
+즉 Vercel에 `REDIS_URL`만 있어도 리뷰/설정/1회용 코드/사용 로그가 영구 저장됩니다.
 
 키가 없으면 API 라우트는 로컬 fallback 분석/명언을 반환합니다.

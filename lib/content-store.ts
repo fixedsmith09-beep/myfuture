@@ -1,6 +1,7 @@
 import { kv } from "@vercel/kv";
 import { AppContentSettings, Review } from "@/types/life";
 import { DEFAULT_SETTINGS } from "@/lib/storage";
+import { canUseRedisUrl, redisGetJson, redisSetJson } from "@/lib/redis-store";
 
 type MemoryState = {
   settings: AppContentSettings;
@@ -34,6 +35,12 @@ export const getSettings = async () => {
     );
     return normalizeSettings(stored ?? undefined);
   }
+  if (canUseRedisUrl()) {
+    const stored = await redisGetJson<Partial<AppContentSettings> & { donationUrl?: string }>(
+      "lga:settings",
+    );
+    return normalizeSettings(stored ?? undefined);
+  }
   return getMemoryState().settings;
 };
 
@@ -47,6 +54,10 @@ export const updateSettings = async (partial: Partial<AppContentSettings>) => {
     await kv.set("lga:settings", next);
     return next;
   }
+  if (canUseRedisUrl()) {
+    await redisSetJson("lga:settings", next);
+    return next;
+  }
   const state = getMemoryState();
   state.settings = next;
   return next;
@@ -56,6 +67,9 @@ export const getReviews = async () => {
   if (hasKvConfig()) {
     return (await kv.get<Review[]>("lga:reviews")) ?? [];
   }
+  if (canUseRedisUrl()) {
+    return (await redisGetJson<Review[]>("lga:reviews")) ?? [];
+  }
   return getMemoryState().reviews;
 };
 
@@ -64,6 +78,10 @@ export const addReview = async (review: Review) => {
   const next = [...current, review];
   if (hasKvConfig()) {
     await kv.set("lga:reviews", next);
+    return next;
+  }
+  if (canUseRedisUrl()) {
+    await redisSetJson("lga:reviews", next);
     return next;
   }
   const state = getMemoryState();
@@ -78,6 +96,10 @@ export const removeReview = async (id: string) => {
     await kv.set("lga:reviews", next);
     return next;
   }
+  if (canUseRedisUrl()) {
+    await redisSetJson("lga:reviews", next);
+    return next;
+  }
   const state = getMemoryState();
   state.reviews = next;
   return next;
@@ -86,6 +108,10 @@ export const removeReview = async (id: string) => {
 export const clearReviews = async () => {
   if (hasKvConfig()) {
     await kv.set("lga:reviews", []);
+    return [];
+  }
+  if (canUseRedisUrl()) {
+    await redisSetJson("lga:reviews", []);
     return [];
   }
   const state = getMemoryState();

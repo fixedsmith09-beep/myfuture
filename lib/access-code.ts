@@ -1,5 +1,13 @@
 import crypto from "crypto";
 import { kv } from "@vercel/kv";
+import {
+  canUseRedisUrl,
+  redisDelete,
+  redisGetJson,
+  redisPushLog,
+  redisReadLogs,
+  redisSetJson,
+} from "@/lib/redis-store";
 
 const ACCESS_CODE_PREFIX = "LGA1";
 
@@ -59,6 +67,10 @@ const setRecord = async (key: string, record: AccessCodeRecord, ttlSeconds: numb
     await kv.set(key, record, { ex: Math.max(60, ttlSeconds) });
     return;
   }
+  if (canUseRedisUrl()) {
+    await redisSetJson(key, record, Math.max(60, ttlSeconds));
+    return;
+  }
   getMemoryStore().set(key, record);
 };
 
@@ -66,6 +78,9 @@ const getRecord = async (key: string) => {
   if (hasKvConfig()) {
     const record = await kv.get<AccessCodeRecord>(key);
     return record;
+  }
+  if (canUseRedisUrl()) {
+    return await redisGetJson<AccessCodeRecord>(key);
   }
   return getMemoryStore().get(key) ?? null;
 };
@@ -75,6 +90,10 @@ const deleteRecord = async (key: string) => {
     await kv.del(key);
     return;
   }
+  if (canUseRedisUrl()) {
+    await redisDelete(key);
+    return;
+  }
   getMemoryStore().delete(key);
 };
 
@@ -82,6 +101,10 @@ const logUsage = async (entry: AccessLogEntry) => {
   if (hasKvConfig()) {
     await kv.lpush("lga:access:logs", JSON.stringify(entry));
     await kv.ltrim("lga:access:logs", 0, 199);
+    return;
+  }
+  if (canUseRedisUrl()) {
+    await redisPushLog("lga:access:logs", entry, 200);
     return;
   }
   const logs = getMemoryLogs();
@@ -161,6 +184,9 @@ export const listAccessLogs = async () => {
         }
       })
       .filter((item): item is AccessLogEntry => Boolean(item));
+  }
+  if (canUseRedisUrl()) {
+    return (await redisReadLogs<AccessLogEntry>("lga:access:logs", 0, 99)) ?? [];
   }
   return getMemoryLogs().slice(0, 100);
 };
