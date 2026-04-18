@@ -33,11 +33,7 @@ export default function AnalyzeClient() {
     if (typeof window === "undefined") return "";
     return localStorage.getItem(STORAGE_KEYS.lifeGoal) ?? "";
   });
-  const [reviews, setReviews] = useState<Review[]>(() => {
-    if (typeof window === "undefined") return [];
-    const raw = localStorage.getItem(STORAGE_KEYS.reviews);
-    return raw ? (JSON.parse(raw) as Review[]) : [];
-  });
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [savedQuotes, setSavedQuotes] = useState<QuoteResult[]>(() => {
     if (typeof window === "undefined") return [];
     const raw = localStorage.getItem(STORAGE_KEYS.savedQuotes);
@@ -50,18 +46,7 @@ export default function AnalyzeClient() {
       person: item.person ?? "",
     }));
   });
-  const [settings, setSettings] = useState<AppContentSettings>(() => {
-    if (typeof window === "undefined") return DEFAULT_SETTINGS;
-    const raw = localStorage.getItem(STORAGE_KEYS.appSettings);
-    if (!raw) return DEFAULT_SETTINGS;
-    const parsed = JSON.parse(raw) as Partial<AppContentSettings> & { donationUrl?: string };
-    return {
-      ...DEFAULT_SETTINGS,
-      ...parsed,
-      donationAccount:
-        parsed.donationAccount ?? parsed.donationUrl ?? DEFAULT_SETTINGS.donationAccount,
-    } as AppContentSettings;
-  });
+  const [settings, setSettings] = useState<AppContentSettings>(DEFAULT_SETTINGS);
   const [scoredEvents, setScoredEvents] = useState<ScoredLifeEvent[]>([]);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [quote, setQuote] = useState<QuoteResult | null>(null);
@@ -84,10 +69,6 @@ export default function AnalyzeClient() {
   }, [lifeGoal]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.reviews, JSON.stringify(reviews));
-  }, [reviews]);
-
-  useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.savedQuotes, JSON.stringify(savedQuotes));
   }, [savedQuotes]);
 
@@ -95,26 +76,36 @@ export default function AnalyzeClient() {
   const hasReviewed = reviews.length > 0;
 
   useEffect(() => {
-    const syncSettings = () => {
-      const rawSettings = localStorage.getItem(STORAGE_KEYS.appSettings);
-      if (!rawSettings) {
-        setSettings(DEFAULT_SETTINGS);
-      } else {
-        const parsed = JSON.parse(rawSettings) as Partial<AppContentSettings> & { donationUrl?: string };
-        setSettings({
-          ...DEFAULT_SETTINGS,
-          ...parsed,
-          donationAccount:
-            parsed.donationAccount ?? parsed.donationUrl ?? DEFAULT_SETTINGS.donationAccount,
-        });
+    const loadData = async () => {
+      const [settingsRes, reviewsRes] = await Promise.all([
+        fetch("/api/app/settings", { cache: "no-store" }),
+        fetch("/api/app/reviews", { cache: "no-store" }),
+      ]);
+
+      if (settingsRes.ok) {
+        const data = await settingsRes.json();
+        setSettings(data.settings ?? DEFAULT_SETTINGS);
       }
-      const rawReviews = localStorage.getItem(STORAGE_KEYS.reviews);
-      if (rawReviews) setReviews(JSON.parse(rawReviews));
+      if (reviewsRes.ok) {
+        const data = await reviewsRes.json();
+        setReviews(data.reviews ?? []);
+      }
     };
 
-    window.addEventListener("storage", syncSettings);
-    return () => window.removeEventListener("storage", syncSettings);
+    loadData();
   }, []);
+
+  const submitReview = async (review: Review) => {
+    const res = await fetch("/api/app/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ review }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setReviews(data.reviews ?? []);
+    }
+  };
 
   const callAnalyze = async () => {
     try {
@@ -312,7 +303,7 @@ export default function AnalyzeClient() {
           </SectionCard>
         ) : null}
 
-        <ReviewSection reviews={reviews} onAddReview={(review) => setReviews((prev) => [...prev, review])} />
+        <ReviewSection reviews={reviews} onAddReview={submitReview} />
 
         {message ? (
           <p className="rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-4 py-3 text-sm text-indigo-200">

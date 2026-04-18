@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import SectionCard from "@/components/SectionCard";
-import { DEFAULT_SETTINGS, STORAGE_KEYS } from "@/lib/storage";
+import { DEFAULT_SETTINGS } from "@/lib/storage";
 import { AppContentSettings, Review } from "@/types/life";
 
 const DAILY_QUOTES = [
@@ -18,23 +18,8 @@ const DAILY_QUOTES = [
 
 export default function Home() {
   const router = useRouter();
-  const [reviews, setReviews] = useState<Review[]>(() => {
-    if (typeof window === "undefined") return [];
-    const raw = localStorage.getItem(STORAGE_KEYS.reviews);
-    return raw ? (JSON.parse(raw) as Review[]) : [];
-  });
-  const [settings, setSettings] = useState<AppContentSettings>(() => {
-    if (typeof window === "undefined") return DEFAULT_SETTINGS;
-    const raw = localStorage.getItem(STORAGE_KEYS.appSettings);
-    if (!raw) return DEFAULT_SETTINGS;
-    const parsed = JSON.parse(raw) as Partial<AppContentSettings> & { donationUrl?: string };
-    return {
-      ...DEFAULT_SETTINGS,
-      ...parsed,
-      donationAccount:
-        parsed.donationAccount ?? parsed.donationUrl ?? DEFAULT_SETTINGS.donationAccount,
-    } as AppContentSettings;
-  });
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [settings, setSettings] = useState<AppContentSettings>(DEFAULT_SETTINGS);
   const isHydrated = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -52,25 +37,23 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const sync = () => {
-      const rawSettings = localStorage.getItem(STORAGE_KEYS.appSettings);
-      if (!rawSettings) {
-        setSettings(DEFAULT_SETTINGS);
-      } else {
-        const parsed = JSON.parse(rawSettings) as Partial<AppContentSettings> & { donationUrl?: string };
-        setSettings({
-          ...DEFAULT_SETTINGS,
-          ...parsed,
-          donationAccount:
-            parsed.donationAccount ?? parsed.donationUrl ?? DEFAULT_SETTINGS.donationAccount,
-        });
+    const loadData = async () => {
+      const [settingsRes, reviewsRes] = await Promise.all([
+        fetch("/api/app/settings", { cache: "no-store" }),
+        fetch("/api/app/reviews", { cache: "no-store" }),
+      ]);
+
+      if (settingsRes.ok) {
+        const data = await settingsRes.json();
+        setSettings(data.settings ?? DEFAULT_SETTINGS);
       }
-      const rawReviews = localStorage.getItem(STORAGE_KEYS.reviews);
-      setReviews(rawReviews ? JSON.parse(rawReviews) : []);
+      if (reviewsRes.ok) {
+        const data = await reviewsRes.json();
+        setReviews(data.reviews ?? []);
+      }
     };
 
-    window.addEventListener("storage", sync);
-    return () => window.removeEventListener("storage", sync);
+    loadData();
   }, []);
 
   const verifyAndGoAnalyze = async () => {

@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import SectionCard from "@/components/SectionCard";
-import { DEFAULT_SETTINGS, STORAGE_KEYS } from "@/lib/storage";
+import { DEFAULT_SETTINGS } from "@/lib/storage";
 import { AppContentSettings, Review } from "@/types/life";
 
 type AccessLogEntry = {
@@ -19,23 +19,8 @@ export default function AdminClient() {
     () => true,
     () => false,
   );
-  const [settings, setSettings] = useState<AppContentSettings>(() => {
-    if (typeof window === "undefined") return DEFAULT_SETTINGS;
-    const raw = localStorage.getItem(STORAGE_KEYS.appSettings);
-    if (!raw) return DEFAULT_SETTINGS;
-    const parsed = JSON.parse(raw) as Partial<AppContentSettings> & { donationUrl?: string };
-    return {
-      ...DEFAULT_SETTINGS,
-      ...parsed,
-      donationAccount:
-        parsed.donationAccount ?? parsed.donationUrl ?? DEFAULT_SETTINGS.donationAccount,
-    };
-  });
-  const [reviews, setReviews] = useState<Review[]>(() => {
-    if (typeof window === "undefined") return [];
-    const raw = localStorage.getItem(STORAGE_KEYS.reviews);
-    return raw ? (JSON.parse(raw) as Review[]) : [];
-  });
+  const [settings, setSettings] = useState<AppContentSettings>(DEFAULT_SETTINGS);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [saved, setSaved] = useState(false);
   const [count, setCount] = useState(1);
   const [validDays, setValidDays] = useState(30);
@@ -45,8 +30,16 @@ export default function AdminClient() {
   const [logs, setLogs] = useState<AccessLogEntry[]>([]);
   const [logLoading, setLogLoading] = useState(false);
 
-  const saveSettings = () => {
-    localStorage.setItem(STORAGE_KEYS.appSettings, JSON.stringify(settings));
+  const saveSettings = async () => {
+    const res = await fetch("/api/app/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ settings }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setSettings(data.settings ?? settings);
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 1200);
   };
@@ -57,14 +50,27 @@ export default function AdminClient() {
   };
 
   const deleteReview = (id: string) => {
-    const next = reviews.filter((review) => review.id !== id);
-    setReviews(next);
-    localStorage.setItem(STORAGE_KEYS.reviews, JSON.stringify(next));
+    fetch("/api/admin/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete", id }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setReviews(data.reviews ?? []);
+      });
   };
 
   const clearReviews = () => {
-    setReviews([]);
-    localStorage.setItem(STORAGE_KEYS.reviews, JSON.stringify([]));
+    fetch("/api/admin/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "clear" }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setReviews(data.reviews ?? []);
+      });
   };
 
   const generateCodes = async () => {
@@ -92,15 +98,38 @@ export default function AdminClient() {
     await navigator.clipboard.writeText(codes.join("\n"));
   };
 
-  const loadLogs = async () => {
-    setLogLoading(true);
+  const loadLogs = async (withLoading = true) => {
+    if (withLoading) setLogLoading(true);
     const res = await fetch("/api/admin/access-logs");
     const data = await res.json();
     if (res.ok) {
       setLogs(data.logs ?? []);
     }
-    setLogLoading(false);
+    if (withLoading) setLogLoading(false);
   };
+
+  const loadBaseData = async () => {
+    const [settingsRes, reviewsRes] = await Promise.all([
+      fetch("/api/app/settings", { cache: "no-store" }),
+      fetch("/api/app/reviews", { cache: "no-store" }),
+    ]);
+
+    if (settingsRes.ok) {
+      const data = await settingsRes.json();
+      setSettings(data.settings ?? DEFAULT_SETTINGS);
+    }
+    if (reviewsRes.ok) {
+      const data = await reviewsRes.json();
+      setReviews(data.reviews ?? []);
+    }
+  };
+
+  useEffect(() => {
+    const loadInitial = async () => {
+      await Promise.all([loadBaseData(), loadLogs(false)]);
+    };
+    loadInitial();
+  }, []);
 
   if (!isHydrated) {
     return (
@@ -131,6 +160,9 @@ export default function AdminClient() {
             </Link>
             <button className="text-sm text-rose-300 hover:text-rose-200" onClick={logout}>
               로그아웃
+            </button>
+            <button className="text-sm text-zinc-300 hover:text-zinc-100" onClick={loadBaseData}>
+              데이터 새로고침
             </button>
           </div>
         </section>
@@ -308,7 +340,7 @@ export default function AdminClient() {
         <SectionCard title="코드 사용 로그" subtitle="최근 사용된 1회용 코드 기록입니다.">
           <div className="mb-3">
             <button
-              onClick={loadLogs}
+              onClick={() => loadLogs()}
               className="rounded-lg border border-zinc-600 px-3 py-2 text-sm text-zinc-200 hover:border-zinc-400"
             >
               {logLoading ? "불러오는 중..." : "로그 새로고침"}
