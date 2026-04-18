@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
 import SectionCard from "@/components/SectionCard";
 import { DEFAULT_SETTINGS, STORAGE_KEYS } from "@/lib/storage";
 import { AppContentSettings, Review } from "@/types/life";
@@ -16,6 +17,7 @@ const DAILY_QUOTES = [
 ] as const;
 
 export default function Home() {
+  const router = useRouter();
   const [reviews, setReviews] = useState<Review[]>(() => {
     if (typeof window === "undefined") return [];
     const raw = localStorage.getItem(STORAGE_KEYS.reviews);
@@ -31,6 +33,10 @@ export default function Home() {
     () => true,
     () => false,
   );
+  const [showCodeModal, setShowCodeModal] = useState(false);
+  const [accessCode, setAccessCode] = useState("");
+  const [accessError, setAccessError] = useState("");
+  const [accessLoading, setAccessLoading] = useState(false);
 
   const dailyQuote = useMemo(() => {
     const key = new Date().toISOString().slice(0, 10);
@@ -49,6 +55,23 @@ export default function Home() {
     window.addEventListener("storage", sync);
     return () => window.removeEventListener("storage", sync);
   }, []);
+
+  const verifyAndGoAnalyze = async () => {
+    setAccessError("");
+    setAccessLoading(true);
+    const res = await fetch("/api/access/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: accessCode }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setAccessError(data.error ?? "코드 확인에 실패했습니다.");
+      setAccessLoading(false);
+      return;
+    }
+    router.push("/analyze");
+  };
 
   if (!isHydrated) {
     return (
@@ -90,12 +113,12 @@ export default function Home() {
           <blockquote className="mx-auto mt-6 max-w-2xl rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-200">
             오늘의 한마디: &ldquo;{dailyQuote}&rdquo;
           </blockquote>
-          <Link
-            href="/analyze"
+          <button
+            onClick={() => setShowCodeModal(true)}
             className="mt-6 inline-flex rounded-lg bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-400"
           >
             분석 시작하기
-          </Link>
+          </button>
         </section>
 
         <SectionCard title="사용자 리뷰">
@@ -142,16 +165,53 @@ export default function Home() {
           >
             후원하기
           </a>
-          <Link
-            href="/analyze"
+          <button
+            onClick={() => setShowCodeModal(true)}
             className="rounded-lg border border-zinc-600 px-4 py-2.5 font-semibold text-zinc-100 transition hover:border-zinc-400"
           >
             서비스 이용하기
-          </Link>
+          </button>
           <p className="self-center text-sm text-zinc-400">
             개발자와 개인적으로 고민과 목표에 대한 대화를 할 수 있습니다.
           </p>
         </div>
+
+        {showCodeModal ? (
+          <section className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+            <div className="w-full max-w-md rounded-2xl border border-zinc-700 bg-zinc-950 p-5 shadow-2xl">
+              <h3 className="text-lg font-semibold text-zinc-100">유료 이용 코드 입력</h3>
+              <p className="mt-1 text-sm text-zinc-400">
+                관리자에게 받은 코드를 입력하면 분석 서비스를 사용할 수 있습니다.
+              </p>
+              <input
+                className="mt-4 w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2"
+                placeholder="LGA1-XXXXX-XXXXX-XXXXX"
+                value={accessCode}
+                onChange={(e) => setAccessCode(e.target.value)}
+              />
+              {accessError ? <p className="mt-2 text-sm text-rose-300">{accessError}</p> : null}
+              <div className="mt-4 flex gap-2">
+                <button
+                  className="rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-60"
+                  onClick={verifyAndGoAnalyze}
+                  disabled={accessLoading || !accessCode.trim()}
+                >
+                  {accessLoading ? "확인 중..." : "확인 후 시작"}
+                </button>
+                <button
+                  className="rounded-lg border border-zinc-600 px-4 py-2 text-sm text-zinc-300 hover:border-zinc-400"
+                  onClick={() => {
+                    setShowCodeModal(false);
+                    setAccessError("");
+                    setAccessCode("");
+                  }}
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+          </section>
+        ) : null}
       </main>
     </div>
   );

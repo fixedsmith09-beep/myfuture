@@ -6,6 +6,13 @@ import SectionCard from "@/components/SectionCard";
 import { DEFAULT_SETTINGS, STORAGE_KEYS } from "@/lib/storage";
 import { AppContentSettings, Review } from "@/types/life";
 
+type AccessLogEntry = {
+  usedAt: number;
+  ip: string;
+  userAgent: string;
+  codeTail: string;
+};
+
 export default function AdminClient() {
   const isHydrated = useSyncExternalStore(
     () => () => {},
@@ -23,6 +30,13 @@ export default function AdminClient() {
     return raw ? (JSON.parse(raw) as Review[]) : [];
   });
   const [saved, setSaved] = useState(false);
+  const [count, setCount] = useState(1);
+  const [validDays, setValidDays] = useState(30);
+  const [codes, setCodes] = useState<string[]>([]);
+  const [codeError, setCodeError] = useState("");
+  const [codeLoading, setCodeLoading] = useState(false);
+  const [logs, setLogs] = useState<AccessLogEntry[]>([]);
+  const [logLoading, setLogLoading] = useState(false);
 
   const saveSettings = () => {
     localStorage.setItem(STORAGE_KEYS.appSettings, JSON.stringify(settings));
@@ -44,6 +58,41 @@ export default function AdminClient() {
   const clearReviews = () => {
     setReviews([]);
     localStorage.setItem(STORAGE_KEYS.reviews, JSON.stringify([]));
+  };
+
+  const generateCodes = async () => {
+    setCodeError("");
+    setCodeLoading(true);
+    const res = await fetch("/api/admin/generate-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ count, validDays }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      setCodeError(data.error ?? "코드 생성에 실패했습니다.");
+      setCodeLoading(false);
+      return;
+    }
+
+    setCodes(data.codes ?? []);
+    setCodeLoading(false);
+  };
+
+  const copyCodes = async () => {
+    if (codes.length === 0) return;
+    await navigator.clipboard.writeText(codes.join("\n"));
+  };
+
+  const loadLogs = async () => {
+    setLogLoading(true);
+    const res = await fetch("/api/admin/access-logs");
+    const data = await res.json();
+    if (res.ok) {
+      setLogs(data.logs ?? []);
+    }
+    setLogLoading(false);
   };
 
   if (!isHydrated) {
@@ -198,6 +247,83 @@ export default function AdminClient() {
             </button>
             {saved ? <p className="text-sm text-emerald-300">저장되었습니다.</p> : null}
           </div>
+        </SectionCard>
+
+        <SectionCard title="유료 이용 코드 발급" subtitle="생성한 코드는 1회용이며, 사용 즉시 소멸됩니다.">
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="grid gap-1 text-sm text-zinc-300">
+              발급 수량 (최대 50)
+              <input
+                type="number"
+                min={1}
+                max={50}
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2"
+                value={count}
+                onChange={(e) => setCount(Number(e.target.value))}
+              />
+            </label>
+            <label className="grid gap-1 text-sm text-zinc-300">
+              유효 기간(일)
+              <input
+                type="number"
+                min={1}
+                max={365}
+                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2"
+                value={validDays}
+                onChange={(e) => setValidDays(Number(e.target.value))}
+              />
+            </label>
+            <button
+              className="rounded-lg bg-emerald-500 px-4 py-2.5 font-semibold text-white transition hover:bg-emerald-400 disabled:opacity-60"
+              onClick={generateCodes}
+              disabled={codeLoading}
+            >
+              {codeLoading ? "생성 중..." : "코드 생성"}
+            </button>
+            <button
+              className="rounded-lg border border-zinc-600 px-4 py-2.5 font-semibold text-zinc-100 transition hover:border-zinc-400"
+              onClick={copyCodes}
+            >
+              코드 전체 복사
+            </button>
+          </div>
+          {codeError ? <p className="mt-2 text-sm text-rose-300">{codeError}</p> : null}
+          {codes.length > 0 ? (
+            <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
+              <p className="mb-2 text-sm text-zinc-300">발급된 코드</p>
+              <pre className="max-h-52 overflow-auto whitespace-pre-wrap text-xs text-zinc-400">
+                {codes.join("\n")}
+              </pre>
+            </div>
+          ) : null}
+        </SectionCard>
+
+        <SectionCard title="코드 사용 로그" subtitle="최근 사용된 1회용 코드 기록입니다.">
+          <div className="mb-3">
+            <button
+              onClick={loadLogs}
+              className="rounded-lg border border-zinc-600 px-3 py-2 text-sm text-zinc-200 hover:border-zinc-400"
+            >
+              {logLoading ? "불러오는 중..." : "로그 새로고침"}
+            </button>
+          </div>
+          {logs.length === 0 ? (
+            <p className="text-sm text-zinc-400">아직 사용 로그가 없습니다.</p>
+          ) : (
+            <div className="grid gap-2">
+              {logs.map((log, index) => (
+                <article
+                  key={`${log.usedAt}-${index}`}
+                  className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-300"
+                >
+                  <p>사용시각: {new Date(log.usedAt).toLocaleString("ko-KR")}</p>
+                  <p>코드 식별: ****{log.codeTail}</p>
+                  <p>IP: {log.ip}</p>
+                  <p className="truncate">UA: {log.userAgent}</p>
+                </article>
+              ))}
+            </div>
+          )}
         </SectionCard>
 
         <SectionCard title="리뷰 관리" subtitle="부적절한 리뷰 삭제나 전체 초기화를 할 수 있습니다.">
